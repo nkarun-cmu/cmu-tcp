@@ -19,6 +19,7 @@
 #include <stdint.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <cstdint>
 
 #include "cmu_packet.h"
 #include "grading.h"
@@ -60,6 +61,9 @@ typedef struct {
   int dying;
   pthread_mutex_t death_lock;
   window_t window;
+  uint32_t initial_seq_num;
+  uint32_t peer_seq_num;
+  // TODO: add field for sliding window
 } cmu_socket_t;
 
 /*

@@ -265,3 +265,20 @@ void *begin_backend(void *in) {
   pthread_exit(NULL);
   return NULL;
 }
+
+      // socklen_t conn_len = sizeof(sock->conn);
+      // uint8_t* packet = create_packet(0, port, sock->initial_seq_num, 0, sizeof(cmu_tcp_header_t), sizeof(cmu_tcp_header_t), SYN_FLAG_MASK, 0, 0, NULL, NULL, 0);
+      // sendto(sock->socket, packet, sizeof(cmu_tcp_header_t), SYN_FLAG_MASK, (struct sockaddr *)&(sock->conn), conn_len);
+      // free(packet);
+      // uint8_t *pkt;
+      // ssize_t len = 0;
+      // while (1) {
+      //   pkt = malloc((ssize_t)sizeof(cmu_tcp_header_t));
+      //   len = recvfrom(sock->socket, pkt, sizeof(cmu_tcp_header_t), 0,
+      //              (struct sockaddr *)&(sock->conn), &conn_len);
+      //   if (len > (ssize_t)sizeof(cmu_tcp_header_t)) {
+          
+
+      //     break;
+      //   }
+      // }
