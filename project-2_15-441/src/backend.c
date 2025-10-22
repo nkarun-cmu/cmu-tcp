@@ -60,12 +60,16 @@ void handle_message(cmu_socket_t *sock, uint8_t *pkt) {
         //flags, get_seq(hdr), get_ack(hdr), get_payload_len(pkt));
   switch (flags) {
     case ACK_FLAG_MASK: {
+      if (sock->conn_status == 0) {
+        break;
+      }
       uint32_t ack = get_ack(hdr);
       if (after(ack, sock->window.last_ack_received)) {
         sock->window.last_ack_received = ack;
       }
       sock->conn_status = 2;
-      if (get_plen(hdr) > sizeof(cmu_tcp_header_t)) {
+      uint8_t *payload = get_payload(pkt);
+      if (get_plen(hdr) > sizeof(cmu_tcp_header_t) && payload != NULL) {
         socklen_t conn_len = sizeof(sock->conn);
         uint32_t seq = sock->window.last_ack_received;
 
@@ -118,12 +122,12 @@ void handle_message(cmu_socket_t *sock, uint8_t *pkt) {
     }
     case ACK_FLAG_MASK | SYN_FLAG_MASK: {
       uint32_t ack = get_ack(hdr);
-      if (after(ack, sock->window.last_ack_received)) {
+      if (ack == sock->window.last_ack_received + 1) {
         sock->window.last_ack_received = ack;
+        uint32_t sn = get_seq(hdr);
+        sock->window.next_seq_expected = sn + 1;
+        sock->conn_status = 2;
       }
-      uint32_t sn = get_seq(hdr);
-      sock->window.next_seq_expected = sn + 1;
-      sock->conn_status = 2;
       break;
     }
     default: {
