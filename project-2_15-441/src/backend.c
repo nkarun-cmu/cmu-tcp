@@ -121,22 +121,22 @@ void handle_message(cmu_socket_t *sock, uint8_t *pkt) {
       break;
     }
     case ACK_FLAG_MASK | SYN_FLAG_MASK: {
-      // uint32_t ack = get_ack(hdr);
-      // if (ack == sock->window.last_ack_received + 1) {
-      //   sock->window.last_ack_received = ack;
-      //   uint32_t sn = get_seq(hdr);
-      //   sock->window.next_seq_expected = sn + 1;
-      //   sock->conn_status = 2;
-      // }
-      // break;
       uint32_t ack = get_ack(hdr);
-      if (after(ack, sock->window.last_ack_received)) {
+      if (ack == sock->initial_seq_num + 1) {
         sock->window.last_ack_received = ack;
+        uint32_t sn = get_seq(hdr);
+        sock->window.next_seq_expected = sn + 1;
+        sock->conn_status = 2;
       }
-      uint32_t sn = get_seq(hdr);
-      sock->window.next_seq_expected = sn + 1;
-      sock->conn_status = 2;
       break;
+      // uint32_t ack = get_ack(hdr);
+      // if (after(ack, sock->window.last_ack_received)) {
+      //   sock->window.last_ack_received = ack;
+      // }
+      // uint32_t sn = get_seq(hdr);
+      // sock->window.next_seq_expected = sn + 1;
+      // sock->conn_status = 2;
+      // break;
     }
     default: {
     }
@@ -295,7 +295,7 @@ void handshake(cmu_socket_t *sock) {
     //fprintf(stderr, "sent flags=%u seq=%u ack=%u plen=%u\n",
         //flags, seq, ack, payload_len);
     check_for_data(sock, TIMEOUT);
-    if (has_been_acked(sock, seq)) {
+    if (sock->window.last_ack_received == seq +1) {
       if (sock->type == TCP_INITIATOR) {
         //respond
         flags = ACK_FLAG_MASK;
