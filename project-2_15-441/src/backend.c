@@ -121,13 +121,21 @@ void handle_message(cmu_socket_t *sock, uint8_t *pkt) {
       break;
     }
     case ACK_FLAG_MASK | SYN_FLAG_MASK: {
+      // uint32_t ack = get_ack(hdr);
+      // if (ack == sock->window.last_ack_received + 1) {
+      //   sock->window.last_ack_received = ack;
+      //   uint32_t sn = get_seq(hdr);
+      //   sock->window.next_seq_expected = sn + 1;
+      //   sock->conn_status = 2;
+      // }
+      // break;
       uint32_t ack = get_ack(hdr);
-      if (ack == sock->window.last_ack_received + 1) {
+      if (after(ack, sock->window.last_ack_received)) {
         sock->window.last_ack_received = ack;
-        uint32_t sn = get_seq(hdr);
-        sock->window.next_seq_expected = sn + 1;
-        sock->conn_status = 2;
       }
+      uint32_t sn = get_seq(hdr);
+      sock->window.next_seq_expected = sn + 1;
+      sock->conn_status = 2;
       break;
     }
     default: {
