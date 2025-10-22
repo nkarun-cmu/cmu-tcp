@@ -269,12 +269,10 @@ void handshake(cmu_socket_t *sock) {
 
   msg = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                       ext_len, ext_data, payload, payload_len);
-  sendto(sockfd, msg, plen, 0, (struct sockaddr *)&(sock->conn),
-            conn_len); //maybe move this into  loop? do we retry?
-  free(msg); //do we need to free?
-  msg = NULL;
   while (1) {
     // FIXME: This is using stop and wait, can we do better?
+    sendto(sockfd, msg, plen, 0, (struct sockaddr *)&(sock->conn),
+            conn_len); //maybe move this into  loop? do we retry?
     check_for_data(sock, TIMEOUT);
     if (has_been_acked(sock, seq)) {
       if (sock->type == TCP_INITIATOR) {
@@ -282,6 +280,8 @@ void handshake(cmu_socket_t *sock) {
         flags = ACK_FLAG_MASK;
         seq = sock->window.last_ack_received;
         ack = sock->window.next_seq_expected;
+        free(msg); //do we need to free?
+        msg = NULL;
         msg = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                       ext_len, ext_data, payload, payload_len);
         sendto(sockfd, msg, plen, 0, (struct sockaddr *)&(sock->conn),
