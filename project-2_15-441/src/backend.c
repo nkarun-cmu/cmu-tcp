@@ -310,7 +310,7 @@ void resend(cmu_socket_t *sock) {
     uint32_t i = i%sock->window.sending_window_size;
     if (sock->window.sendQ[i] != NULL) {
       time_t current_time = time(NULL);
-      if (current_time >= sock->window.sendQ[i]->sent_time + DEFAULT_TIMEOUT || go_back_n) {
+      if (current_time >= sock->window.sendQ[i]->sent_time + (DEFAULT_TIMEOUT/1000) || go_back_n) {
         msg = sock->window.sendQ[i]->msg;
         sendto(sockfd, msg, sock->window.sendQ[i]->plen, 0, (struct sockaddr *)&(sock->conn), conn_len);
         go_back_n = 1;
