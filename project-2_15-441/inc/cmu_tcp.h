@@ -27,9 +27,22 @@
 #define EXIT_ERROR -1
 #define EXIT_FAILURE 1
 
+typedef struct sendQ_slot {
+    //how to do timer
+    time_t sent_time;
+    uint8_t*     msg;
+    uint16_t plen; 
+} sendQ_slot;
+
 typedef struct {
-  uint32_t next_seq_expected;
-  uint32_t last_ack_received;
+  //sender window size is a constant
+  uint32_t sending_window_size;
+  uint32_t last_ack_received; //LAR
+  uint32_t last_frame_sent; //LFS
+  //sender buffer?
+  sendQ_slot* sendQ[CP1_WINDOW_SIZE];
+  //receiver window size is 1 for now
+  uint32_t next_seq_expected; //NFE = LFR + 1
 } window_t;
 
 /**

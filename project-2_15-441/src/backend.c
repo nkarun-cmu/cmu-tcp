@@ -65,7 +65,13 @@ void handle_message(cmu_socket_t *sock, uint8_t *pkt) {
       }
       uint32_t ack = get_ack(hdr);
       if (after(ack, sock->window.last_ack_received)) {
-        sock->window.last_ack_received = ack;
+        //TODO: implemenent cumaltive ack and make sure only removing from buffer if in order
+        if (ack <= sock->window.last_frame_sent + 1) { //so ack is between LAR and LSF incl
+          for (uint32_t i = sock->window.last_ack_received; i <= ack; i++) {
+            sock->window.sendQ[i%sock->window.sending_window_size] = NULL;
+          }
+          sock->window.last_ack_received = ack; 
+        }
       }
       sock->conn_status = 2;
       uint8_t *payload = get_payload(pkt);
@@ -129,14 +135,6 @@ void handle_message(cmu_socket_t *sock, uint8_t *pkt) {
         sock->conn_status = 2;
       }
       break;
-      // uint32_t ack = get_ack(hdr);
-      // if (after(ack, sock->window.last_ack_received)) {
-      //   sock->window.last_ack_received = ack;
-      // }
-      // uint32_t sn = get_seq(hdr);
-      // sock->window.next_seq_expected = sn + 1;
-      // sock->conn_status = 2;
-      // break;
     }
     default: {
     }
@@ -252,6 +250,75 @@ void single_send(cmu_socket_t *sock, uint8_t *data, int buf_len) {
   }
 }
 
+void sliding_window_send(cmu_socket_t *sock, uint8_t *data, int buf_len) {
+  uint8_t *msg;
+  uint8_t *data_offset = data;
+  size_t conn_len = sizeof(sock->conn);
+
+  int sockfd = sock->socket;
+
+  if (buf_len > 0) {
+    // while (1) {
+    //   if (sock->window.last_frame_sent - sock->window.last_ack_received <= sock->window.sending_window_size) {
+    //     break;
+    //   }
+    // }
+
+    while (buf_len != 0) {
+      uint16_t payload_len = MIN((uint32_t)buf_len, (uint32_t)MSS);
+
+      uint16_t src = sock->my_port;
+      uint16_t dst = ntohs(sock->conn.sin_port);
+      uint32_t seq = sock->window.last_ack_received;
+      uint32_t ack = sock->window.next_seq_expected;
+      uint16_t hlen = sizeof(cmu_tcp_header_t);
+      uint16_t plen = hlen + payload_len;
+      uint8_t flags = ACK_FLAG_MASK;
+      uint16_t adv_window = 1;
+      uint16_t ext_len = 0;
+      uint8_t *ext_data = NULL;
+      uint8_t *payload = data_offset;
+
+      msg = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
+                          ext_len, ext_data, payload, payload_len);
+      buf_len -= payload_len;
+
+      while (1) {
+        if (sock->window.last_frame_sent - sock->window.last_ack_received <= sock->window.sending_window_size) {
+          sendto(sockfd, msg, plen, 0, (struct sockaddr *)&(sock->conn), conn_len);
+          sock->window.last_frame_sent++;
+          //add msg outsanding message buffer
+          time_t sent_time = time(NULL);
+          struct sendQ_slot slot = {sent_time, msg, plen}; //or msg idk
+          sock->window.sendQ[seq % sock->window.sending_window_size] = &slot; 
+          break;
+        }
+      }
+
+      data_offset += payload_len;
+    }
+  }
+}
+
+void resend(cmu_socket_t *sock) {
+  uint8_t *msg;
+  size_t conn_len = sizeof(sock->conn);
+
+  int sockfd = sock->socket;
+  int go_back_n = 0;
+  for (uint32_t sn = sock->window.last_ack_received; sn <= sock->window.last_frame_sent; sn++) {
+    uint32_t i = i%sock->window.sending_window_size;
+    if (sock->window.sendQ[i] != NULL) {
+      time_t current_time = time(NULL);
+      if (current_time >= sock->window.sendQ[i]->sent_time + DEFAULT_TIMEOUT || go_back_n) {
+        msg = sock->window.sendQ[i]->msg;
+        sendto(sockfd, msg, sock->window.sendQ[i]->plen, 0, (struct sockaddr *)&(sock->conn), conn_len);
+        go_back_n = 1;
+      }
+    }
+  }
+}
+
 void handshake(cmu_socket_t *sock) {
   uint8_t *msg;
   size_t conn_len = sizeof(sock->conn);
@@ -288,6 +355,7 @@ void handshake(cmu_socket_t *sock) {
 
   msg = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                       ext_len, ext_data, payload, payload_len);
+  sock->window.last_frame_sent = sock->initial_seq_num;
   while (1) {
     // FIXME: This is using stop and wait, can we do better?
     sendto(sockfd, msg, plen, 0, (struct sockaddr *)&(sock->conn),
@@ -322,6 +390,7 @@ void *begin_backend(void *in) {
   int death, buf_len, send_signal;
   uint8_t *data;
 
+  sock->window.sending_window_size = CP1_WINDOW_SIZE;
   sock->conn_status = 0;
   handshake(sock);
 
@@ -346,13 +415,16 @@ void *begin_backend(void *in) {
       free(sock->sending_buf);
       sock->sending_buf = NULL;
       pthread_mutex_unlock(&(sock->send_lock));
-      single_send(sock, data, buf_len);
+      //single_send(sock, data, buf_len);
+      sliding_window_send(sock, data, buf_len);
       free(data);
     } else {
       pthread_mutex_unlock(&(sock->send_lock));
     }
 
     check_for_data(sock, NO_WAIT);
+
+    resend(sock);
 
     while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
     }
